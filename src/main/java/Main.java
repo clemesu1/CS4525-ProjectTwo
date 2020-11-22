@@ -22,10 +22,8 @@ public class Main {
 
         /* Main Command Prompt */
         while (true) {
-            if (!begin) {
-                System.out.print("> ");
-                begin = true;
-            }
+            System.out.print("> ");
+            begin = true;
             String userInput = scan.nextLine();
             String[] query = userInput.toLowerCase().split("\\s");
             for (int i = 0; i < query.length; i++) {
@@ -34,19 +32,20 @@ public class Main {
                     System.exit(0);
                 } else if (query[0].equals("insert")) {
                     insert(query);
+                    break;
                 } else if (query[0].equals("delete")) {
                     delete(query);
+                    break;
                 } else if (query[0].equals("select")) {
                     select(query);
-                    query = new String[0];
+                    break;
                 } else {
                     System.out.println(query[i]);
+                    break;
                 }
             }
             begin = false;
         }
-
-
     }
 
     private static void delete(String[] query) {
@@ -102,7 +101,7 @@ public class Main {
             writer.append("\n");
         }
         writer.flush();
-        
+        writer.close();
     }
 
     private static int hashFunction(String key) {
