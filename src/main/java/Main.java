@@ -109,52 +109,6 @@ public class Main {
         outputFile.close();
     }
 
-//    private static void createFile(File in, File out) throws IOException {
-//        RandomAccessFile randomAccessFile = new RandomAccessFile(in, "r");
-//        FileChannel fileChannel = randomAccessFile.getChannel();
-//        FileWriter writer = new FileWriter(out);
-//
-//        // Read column header for the table.
-//        randomAccessFile.seek(0);
-//        String line = randomAccessFile.readLine();
-//        String[] header = line.split(",");
-//
-//        // Read column values into a list.
-//        line = randomAccessFile.readLine();
-//        List<String[]> recordList = new ArrayList<>();
-//        while(line != null) {
-//            String[] record = line.split(",");
-//            recordList.add(record);
-//            line = randomAccessFile.readLine();
-//        }
-//
-//        randomAccessFile.seek(0);
-//
-//        // Create empty string array for hash index.
-//        String[] output = new String[100];
-//        Arrays.fill(output, "");
-//
-//        // Format and save records to string array.
-//        for(String[] record : recordList) {
-//            int hash = hashFunction(record[0]);
-//            for (int i = 0; i < record.length; i++) {
-//                record[i] = header[i] + ": " + record[i];
-//            }
-//            output[hash] += String.join(";", record) + ",";
-//        }
-//
-//        // Write record data to hash file organization.
-//        for (int i=0; i<output.length; i++) {
-//            writer.append(Integer.toString(i));
-//            writer.append(",");
-//            writer.append(output[i]);
-//            writer.append("\n");
-//        }
-//        writer.flush();
-//        writer.close();
-//        randomAccessFile.close();
-//    }
-
     private static int hashFunction(String key) {
         return Math.abs(key.hashCode() % 100);
     }
