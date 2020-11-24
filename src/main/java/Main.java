@@ -27,8 +27,8 @@ public class Main {
         while (true) {
             System.out.print("> ");
             begin = true;
-            String userInput = scan.nextLine();
-            String[] query = userInput.toLowerCase().split("\\s");
+            String userInput = scan.nextLine().toLowerCase();
+            String[] query = userInput.split("\\s");
             for (int i = 0; i < query.length; i++) {
                 if (query[0].equals("quit")) {
                     scan.close();
@@ -37,10 +37,10 @@ public class Main {
                     insert(userInput, hfo);
                     break;
                 } else if (query[0].equals("delete")) {
-                    delete(query, hfo);
+                    delete(userInput, hfo);
                     break;
                 } else if (query[0].equals("select")) {
-                    select(query, hfo);
+                    select(userInput, hfo);
                     break;
                 } else {
                     System.out.println(query[i]);
@@ -50,7 +50,7 @@ public class Main {
         }
     }
 
-    // insert into (course_id, title, dept_name, credits) values (CS-425, Database Systems, Comp. Sci, 4);
+    // insert into (course_id, title, dept_name, credits) values (CS-452, Database Systems, Comp. Sci, 4);
     private static void insert(String query, File file) throws IOException {
         RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
         FileChannel fileChannel = randomAccessFile.getChannel();
@@ -93,6 +93,9 @@ public class Main {
                 hfo[index] += tuple;
             }
         }
+
+        System.out.println("INSERTED COLUMN INTO DATABASE");
+
         // Write to output file.
         fileChannel.position(0);
         for(int i=0; i<hfo.length; i++) {
@@ -105,11 +108,59 @@ public class Main {
         randomAccessFile.close();
     }
 
-    private static void delete(String[] query, File file) {
+    private static void delete(String query, File file) throws IOException {
+        RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
+        FileChannel fileChannel = randomAccessFile.getChannel();
+        ByteBuffer byteBuffer = ByteBuffer.allocate((int) fileChannel.size());
+
+        // Get delete condition from query string.
+        String condition = query.substring(query.indexOf("where") + 6, query.length());
+
+        // Separate attribute header and value from condition.
+        String[] attributes = condition.split("=");
+        attributes[1] = attributes[1].toUpperCase();
+
+        // Format string for search.
+        condition = attributes[0] + ": " + attributes[1];
+
+        // Read data from file.
+        fileChannel.read(byteBuffer);
+        String fileContent = new String(byteBuffer.array(), StandardCharsets.UTF_8);
+        byteBuffer.flip();
+
+        // Place hash file organization in string array.
+        String[] hfo = fileContent.split("\\r?\\n");
+
+        // Calculate hash value on attribute
+        int hash = hashFunction(attributes[1]);
+
+        String[] rows = hfo[hash].split(",");
+        for(int i=0; i<rows.length; i++) {
+            if (rows[i].startsWith(condition)) {
+                // Delete row.
+                rows[i] = "";
+                System.out.println("DELETED " + attributes[1] + " FROM DATABASE");
+                break;
+            }
+        }
+
+        // Update value in HFO.
+        hfo[hash] = String.join(",", rows);
+
+        // Write to output file.
+        fileChannel.position(0);
+        for(int i=0; i<hfo.length; i++) {
+            String line = hfo[i] + "\n";
+            byteBuffer = ByteBuffer.wrap(line.getBytes(StandardCharsets.UTF_8));
+            fileChannel.write(byteBuffer);
+        }
+
+        fileChannel.close();
+        randomAccessFile.close();
 
     }
 
-    private static void select(String[] query, File file) {
+    private static void select(String query, File file) {
 
     }
 
