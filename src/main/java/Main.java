@@ -165,7 +165,6 @@ public class Main {
     private static void select(String query, File file) throws IOException {
         RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
         FileChannel fileChannel = randomAccessFile.getChannel();
-        ByteBuffer byteBuffer = ByteBuffer.allocate((int) fileChannel.size());
 
         String[] queryTokens = query.split("\\s");
 
@@ -179,14 +178,13 @@ public class Main {
             String columns = query.substring(beginIndex, endIndex);
             selectColumns(columns, fileChannel);
         }
+
+        fileChannel.close();
+        randomAccessFile.close();
     }
 
     // SELECT * FROM table_name;
     private static void selectAll(FileChannel fileChannel) throws IOException {
-        // Read table from file.
-        // Format correctly.
-        // Print to the command prompt.
-
         ByteBuffer byteBuffer = ByteBuffer.allocate((int) fileChannel.size());
         fileChannel.read(byteBuffer);
 
@@ -246,8 +244,6 @@ public class Main {
         }
         System.out.println();
 
-
-
         for (int i=0; i<tableData[0].length; i++) {
             String rowFormat = "|";
             for (int j=0; j<tableData.length; j++) {
@@ -263,21 +259,101 @@ public class Main {
 
     }
 
-    // SELECT column1, column2 FROM table_name;
-    private static void selectColumns(String columns, FileChannel fileChannel) {
+    // SELECT course_id, title FROM table_name;
+    private static void selectColumns(String columns, FileChannel fileChannel) throws IOException {
         String[] attributes = columns.split(", ");
+        ByteBuffer byteBuffer = ByteBuffer.allocate((int) fileChannel.size());
+        fileChannel.read(byteBuffer);
 
-    }
+        // Read data from file.
+        fileChannel.read(byteBuffer);
+        String fileContent = new String(byteBuffer.array(), StandardCharsets.UTF_8);
+        byteBuffer.flip();
 
-    private static int getLongestStringSize(String[] array) {
-        int maxLength = 0;
-        String longestString = null;
-        for (String s : array) {
-            if (s.length() > maxLength) {
-                maxLength = s.length();
+        String[] fileOrganization = fileContent.split("\\r?\\n");
+
+        List<String> rowList = new ArrayList<>();
+        for (int i=0; i<fileOrganization.length; i++) {
+            String[] file = fileOrganization[i].split(",");
+            for (int j = 1; j < file.length; j++) {
+                rowList.add(file[j]);
             }
         }
-        return maxLength;
+
+        // Split rows into attribute list
+        List<String[]> attributeList = new ArrayList<>();
+        for(String row : rowList) {
+            String[] attribute = row.split(";");
+            attributeList.add(attribute);
+        }
+
+        List<String> selectedList = new ArrayList<>();
+        for (String[] attribute : attributeList) {
+            String selectedAttributes = "";
+            for (int i=0; i<attributes.length; i++) {
+                for (int j=0; j<attribute.length; j++) {
+                    if(attribute[j].startsWith(attributes[i])) {
+                        selectedAttributes += attribute[j] + "; ";
+                    }
+                }
+
+            }
+            selectedList.add(selectedAttributes);
+        }
+
+        attributeList.clear();
+
+        for(String row : selectedList) {
+            String[] attribute = row.split(";");
+            attributeList.add(attribute);
+        }
+
+        int attributeLength = attributeList.get(0).length - 1;
+
+        String[][] tableData = new String[attributeLength][rowList.size()];
+        String[] header = new String[attributeLength];
+        int[] headerSizes = new int[attributeLength];
+
+        for (int i=0; i<attributeLength; i++) {
+            String[] value = null;
+            for (int j=0; j<attributeList.size(); j++) {
+                value = attributeList.get(j)[i].split(":");
+                tableData[i][j] = value[1];
+            }
+            header[i] = value[0];
+            headerSizes[i] = getLongestStringSize(tableData[i]);
+        }
+
+        String attributeHeader = "#";
+
+        for (int i=0; i<headerSizes.length; i++) {
+            int headerSize = Math.max((headerSizes[i]), header[i].length());
+            attributeHeader += String.format(" %-" +headerSize+"s #", header[i]);
+        }
+
+        int headerLength = attributeHeader.length();
+        for(int i=0; i<headerLength; i++) {
+            System.out.print("#");
+        }
+        System.out.println("\n" + attributeHeader);
+        for(int i=0; i<headerLength; i++) {
+            System.out.print("#");
+        }
+        System.out.println();
+
+        for (int i=0; i<tableData[0].length; i++) {
+            String rowFormat = "|";
+            for (int j=0; j<tableData.length; j++) {
+                rowFormat += String.format(" %-" + Math.max((headerSizes[j]), header[j].length()) + "s |", tableData[j][i]);
+            }
+            System.out.println(rowFormat);
+        }
+
+        for(int i=0; i<headerLength; i++) {
+            System.out.print("-");
+        }
+        System.out.println();
+
     }
 
     private static void createFile(File in, File out) throws IOException {
@@ -337,4 +413,16 @@ public class Main {
     private static int hashFunction(String key) {
         return Math.abs(key.hashCode() % 100);
     }
+
+    private static int getLongestStringSize(String[] array) {
+        int maxLength = 0;
+        String longestString = null;
+        for (String s : array) {
+            if (s.length() > maxLength) {
+                maxLength = s.length();
+            }
+        }
+        return maxLength;
+    }
+
 }
