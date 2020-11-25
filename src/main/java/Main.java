@@ -9,7 +9,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Main {
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws Exception {
         String inputLocation = "C:\\Users\\coliw\\OneDrive\\Documents\\University Year 4\\CS 4525\\Project 2\\course.csv";
         String outputLocation = "C:\\Users\\coliw\\OneDrive\\Documents\\University Year 4\\CS 4525\\Project 2\\hashFileOrganization.csv";
         File in = new File(inputLocation);
@@ -50,143 +50,156 @@ public class Main {
         }
     }
 
-    // insert into (course_id, title, dept_name, credits) values (CS-452, Database Systems, Comp. Sci, 4);
-    private static void insert(String query, File file) throws IOException {
-        RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-        FileChannel fileChannel = randomAccessFile.getChannel();
-        ByteBuffer byteBuffer = ByteBuffer.allocate((int) fileChannel.size());
-
-        // Parse input query.
-        String[] header = null;
-        String[] record = null;
-        Matcher m = Pattern.compile("\\(([^)]+)\\)").matcher(query);
-        for(int i=0; m.find(); i++) {
-            if (i==0) {
-                header = m.group(1).split(",");
-            } else {
-                record = m.group(1).split(",");
+    // insert into (course_id, title, dept_name, credits) values (CS-101, Database Systems, Comp. Sci, 4);
+    private static void insert(String query, File file) throws Exception {
+        try {
+            RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
+            FileChannel fileChannel = randomAccessFile.getChannel();
+            ByteBuffer byteBuffer = ByteBuffer.allocate((int) fileChannel.size());
+            fileChannel.position(0);
+            // Parse input query.
+            String[] header = null;
+            String[] record = null;
+            Matcher m = Pattern.compile("\\(([^)]+)\\)").matcher(query);
+            for (int i = 0; m.find(); i++) {
+                if (i == 0) {
+                    header = m.group(1).split(",");
+                } else {
+                    record = m.group(1).split(",");
+                }
             }
-        }
-        // Compute hash function for primary key.
-        int hash = hashFunction(record[0]);
+            // Compute hash function for primary key.
+            int hash = hashFunction(record[0]);
 
-        // Put string in correct format to write.
-        for(int i=0; i<record.length; i++) {
-            if(header[i].startsWith("\uFEFF"))
-                header[i] = header[i].substring(1);
-            record[i] = header[i] + ": " + record[i];
-        }
-        String tuple = String.join(";", record) + ",";
-
-        // Read data from file.
-        fileChannel.read(byteBuffer);
-        String fileContent = new String(byteBuffer.array(), StandardCharsets.UTF_8);
-        byteBuffer.flip();
-
-        // Place hash file organization in string array.
-        String[] hfo = fileContent.split("\\r?\\n");
-
-        // Insert record to hash file organization.
-        for(int i=0; i<hfo.length; i++) {
-            int index = Integer.parseInt(hfo[i].substring(0, hfo[i].indexOf(",")));
-            if(index == hash) {
-                hfo[index] += tuple;
+            // Put string in correct format to write.
+            for (int i = 0; i < record.length; i++) {
+                if (header[i].startsWith("\uFEFF"))
+                    header[i] = header[i].substring(1);
+                record[i] = header[i] + ": " + record[i];
             }
+            String tuple = String.join(";", record) + ",";
+
+            // Read data from file.
+            fileChannel.read(byteBuffer);
+            String fileContent = new String(byteBuffer.array(), StandardCharsets.UTF_8);
+            byteBuffer.flip();
+
+            // Place hash file organization in string array.
+            String[] hfo = fileContent.split("\\r?\\n");
+
+            // Insert record to hash file organization.
+            for (int i = 0; i < hfo.length; i++) {
+                int index = Integer.parseInt(hfo[i].substring(0, hfo[i].indexOf(",")));
+                if (index == hash) {
+                    hfo[index] += tuple;
+                }
+            }
+
+            System.out.println("INSERTED COLUMN INTO DATABASE");
+
+            // Write to output file.
+            fileChannel.position(0);
+            for (int i = 0; i < hfo.length; i++) {
+                String line = hfo[i] + "\n";
+                byteBuffer = ByteBuffer.wrap(line.getBytes(StandardCharsets.UTF_8));
+                fileChannel.write(byteBuffer);
+            }
+
+            fileChannel.close();
+            randomAccessFile.close();
+        } catch (StringIndexOutOfBoundsException e) {
+            return;
         }
-
-        System.out.println("INSERTED COLUMN INTO DATABASE");
-
-        // Write to output file.
-        fileChannel.position(0);
-        for(int i=0; i<hfo.length; i++) {
-            String line = hfo[i] + "\n";
-            byteBuffer = ByteBuffer.wrap(line.getBytes(StandardCharsets.UTF_8));
-            fileChannel.write(byteBuffer);
-        }
-
-        fileChannel.close();
-        randomAccessFile.close();
     }
 
-    private static void delete(String query, File file) throws IOException {
-        RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-        FileChannel fileChannel = randomAccessFile.getChannel();
-        ByteBuffer byteBuffer = ByteBuffer.allocate((int) fileChannel.size());
+    // delete from table where course_id=BIO-101
+    private static void delete(String query, File file) throws Exception {
+        try {
+            RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
+            FileChannel fileChannel = randomAccessFile.getChannel();
+            ByteBuffer byteBuffer = ByteBuffer.allocate((int) fileChannel.size());
+            fileChannel.position(0);
+            // Get delete condition from query string.
+            String condition = query.substring(query.indexOf("where") + 6, query.length());
 
-        // Get delete condition from query string.
-        String condition = query.substring(query.indexOf("where") + 6, query.length());
+            // Separate attribute header and value from condition.
+            String[] attributes = condition.split("=");
+            attributes[1] = attributes[1].toUpperCase();
 
-        // Separate attribute header and value from condition.
-        String[] attributes = condition.split("=");
-        attributes[1] = attributes[1].toUpperCase();
+            // Format string for search.
+            condition = attributes[0] + ": " + attributes[1];
 
-        // Format string for search.
-        condition = attributes[0] + ": " + attributes[1];
+            // Read data from file.
+            fileChannel.read(byteBuffer);
+            String fileContent = new String(byteBuffer.array(), StandardCharsets.UTF_8);
+            byteBuffer.flip();
 
-        // Read data from file.
-        fileChannel.read(byteBuffer);
-        String fileContent = new String(byteBuffer.array(), StandardCharsets.UTF_8);
-        byteBuffer.flip();
+            // Place hash file organization in string array.
+            String[] hfo = fileContent.split("\\r?\\n");
 
-        // Place hash file organization in string array.
-        String[] hfo = fileContent.split("\\r?\\n");
+            // Calculate hash value on attribute
+            int hash = hashFunction(attributes[1]);
 
-        // Calculate hash value on attribute
-        int hash = hashFunction(attributes[1]);
-
-        String[] rows = hfo[hash].split(",");
-        for(int i=0; i<rows.length; i++) {
-            if (rows[i].startsWith(condition)) {
-                // Delete row.
-                rows[i] = "";
-                break;
+            String[] rows = hfo[hash].split(",");
+            for(int i=0; i<rows.length; i++) {
+                if (rows[i].startsWith(condition)) {
+                    // Delete row.
+                    rows[i] = "";
+                    break;
+                }
             }
+
+            System.out.println("DELETED " + attributes[1] + " FROM DATABASE");
+
+            // Update value in HFO.
+            hfo[hash] = String.join(",", rows);
+
+            // Write to output file.
+            fileChannel.position(0);
+            for(int i=0; i<hfo.length; i++) {
+                String line = hfo[i] + "\n";
+                byteBuffer = ByteBuffer.wrap(line.getBytes(StandardCharsets.UTF_8));
+                fileChannel.write(byteBuffer);
+            }
+
+            fileChannel.close();
+            randomAccessFile.close();
+        } catch (StringIndexOutOfBoundsException e) {
+            return;
         }
-
-        System.out.println("DELETED " + attributes[1] + " FROM DATABASE");
-
-        // Update value in HFO.
-        hfo[hash] = String.join(",", rows);
-
-        // Write to output file.
-        fileChannel.position(0);
-        for(int i=0; i<hfo.length; i++) {
-            String line = hfo[i] + "\n";
-            byteBuffer = ByteBuffer.wrap(line.getBytes(StandardCharsets.UTF_8));
-            fileChannel.write(byteBuffer);
-        }
-
-        fileChannel.close();
-        randomAccessFile.close();
     }
 
     // SELECT * FROM table_name;
     // SELECT column1, column2 FROM table_name;
-    private static void select(String query, File file) throws IOException {
-        RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-        FileChannel fileChannel = randomAccessFile.getChannel();
+    private static void select(String query, File file) throws Exception {
+        try {
+            RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
+            FileChannel fileChannel = randomAccessFile.getChannel();
+            fileChannel.position(0);
+            String[] queryTokens = query.split("\\s");
 
-        String[] queryTokens = query.split("\\s");
+            if (queryTokens[1].equals("*")) {
+                // Select * statement
+                selectAll(fileChannel);
+            } else {
+                // Select specified columns
+                int beginIndex = queryTokens[0].length() + 1;
+                int endIndex = query.indexOf("from") - 1;
+                String columns = query.substring(beginIndex, endIndex);
+                selectColumns(columns, fileChannel);
+            }
 
-        if (queryTokens[1].equals("*")) {
-            // Select * statement
-            selectAll(fileChannel);
-        } else {
-            // Select specified columns
-            int beginIndex = queryTokens[0].length() + 1;
-            int endIndex = query.indexOf("from") - 1;
-            String columns = query.substring(beginIndex, endIndex);
-            selectColumns(columns, fileChannel);
+            fileChannel.close();
+            randomAccessFile.close();
+        } catch (StringIndexOutOfBoundsException e) {
+            return;
         }
-
-        fileChannel.close();
-        randomAccessFile.close();
     }
 
     // SELECT * FROM table_name;
-    private static void selectAll(FileChannel fileChannel) throws IOException {
+    private static void selectAll(FileChannel fileChannel) throws Exception {
         ByteBuffer byteBuffer = ByteBuffer.allocate((int) fileChannel.size());
-        fileChannel.read(byteBuffer);
+        fileChannel.position(0);
 
         // Read data from file.
         fileChannel.read(byteBuffer);
@@ -260,10 +273,10 @@ public class Main {
     }
 
     // SELECT course_id, title FROM table_name;
-    private static void selectColumns(String columns, FileChannel fileChannel) throws IOException {
+    private static void selectColumns(String columns, FileChannel fileChannel) throws Exception {
         String[] attributes = columns.split(", ");
         ByteBuffer byteBuffer = ByteBuffer.allocate((int) fileChannel.size());
-        fileChannel.read(byteBuffer);
+        fileChannel.position(0);
 
         // Read data from file.
         fileChannel.read(byteBuffer);
