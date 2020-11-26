@@ -27,19 +27,19 @@ public class Main {
         while (true) {
             System.out.print("> ");
             begin = true;
-            String userInput = scan.nextLine().toLowerCase();
+            String userInput = scan.nextLine();
             String[] query = userInput.split("\\s");
             for (int i = 0; i < query.length; i++) {
-                if (query[0].equals("quit")) {
+                if (query[0].toLowerCase().equals("quit")) {
                     scan.close();
                     System.exit(0);
-                } else if (query[0].equals("insert")) {
+                } else if (query[0].toLowerCase().equals("insert")) {
                     insert(userInput, hfo);
                     break;
-                } else if (query[0].equals("delete")) {
+                } else if (query[0].toLowerCase().equals("delete")) {
                     delete(userInput, hfo);
                     break;
-                } else if (query[0].equals("select")) {
+                } else if (query[0].toLowerCase().equals("select")) {
                     select(userInput, hfo);
                     break;
                 } else {
@@ -50,7 +50,7 @@ public class Main {
         }
     }
 
-    // insert into (course_id, title, dept_name, credits) values (CS-101, Database Systems, Comp. Sci, 4);
+    // insert into (course_id, title, dept_name, credits) values (CS-452, Database Systems, Comp. Sci, 4);
     private static void insert(String query, File file) throws Exception {
         try {
             RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
@@ -95,7 +95,7 @@ public class Main {
                 }
             }
 
-            System.out.println("INSERTED COLUMN INTO DATABASE");
+            System.out.println("INSERTED RECORD INTO DATABASE");
 
             // Write to output file.
             fileChannel.position(0);
@@ -171,77 +171,72 @@ public class Main {
 
     // SELECT * FROM table_name;
     // SELECT column1, column2 FROM table_name;
-    private static void select(String query, File file) throws Exception {
-        try {
-            RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
+    private static void select(String query, File file) {
+        try (RandomAccessFile randomAccessFile = new RandomAccessFile(file, "r")) {
             FileChannel fileChannel = randomAccessFile.getChannel();
+            ByteBuffer byteBuffer = ByteBuffer.allocate((int) fileChannel.size());
             fileChannel.position(0);
-            String[] queryTokens = query.split("\\s");
 
-            if (queryTokens[1].equals("*")) {
-                // Select * statement
-                selectAll(fileChannel);
-            } else {
-                // Select specified columns
-                int beginIndex = queryTokens[0].length() + 1;
-                int endIndex = query.indexOf("from") - 1;
-                String columns = query.substring(beginIndex, endIndex);
-                selectColumns(columns, fileChannel);
-            }
+            // Determine select operation type.
+            String[] tokens = query.split("\\s");
+            String columns = ((tokens[1].equals("*")) ? "*" : query.substring(tokens[0].length() + 1, query.toLowerCase().indexOf("from") - 1));
+
+            // Read file from disk.
+            fileChannel.read(byteBuffer);
+            String fileContent = new String(byteBuffer.array(), StandardCharsets.UTF_8);
 
             fileChannel.close();
-            randomAccessFile.close();
-        } catch (StringIndexOutOfBoundsException e) {
+
+            // Place file into string array.
+            String[] hashFileOrganization = fileContent.split("\\r?\\n");
+
+            List<String[]> attributeList = new ArrayList<>();
+            for (int i=0; i<hashFileOrganization.length; i++) {
+                String[] row = hashFileOrganization[i].split(",");
+                for (int j=1; j<row.length; j++) {
+                    String[] attribute = row[j].split(";");
+                    if (!columns.equals("*")) {
+                        String selectedAttributes = "";
+                        for (int k=0; k<columns.split(", ").length; k++) {
+                            for (int col=0; col<attribute.length; col++) {
+                                if (attribute[col].startsWith(columns.split(", ")[k])) {
+                                    selectedAttributes += attribute[col] + ";";
+                                }
+                            }
+                        }
+                        attributeList.add(selectedAttributes.split(";"));
+                    } else {
+                        attributeList.add(attribute);
+                    }
+                }
+            }
+
+            int numOfRows = attributeList.size();
+            int numOfCols = attributeList.get(0).length;
+            String[][] relationData = new String[numOfCols][numOfRows];
+            String[] header = new String[numOfCols];
+            int[] headerSizes = new int[numOfCols];
+
+            for (int i=0; i<numOfCols; i++) {
+                String[] attribute = null;
+                for (int j=0; j<numOfRows; j++) {
+                    attribute = attributeList.get(j)[i].split(":");
+                    relationData[i][j] = attribute[1];
+                }
+                header[i] = attribute[0];
+                headerSizes[i] = getLongestStringSize(relationData[i]);
+            }
+
+            printTable(relationData, header, headerSizes);
+
+        } catch (Exception e) {
             return;
         }
     }
 
-    // SELECT * FROM table_name;
-    private static void selectAll(FileChannel fileChannel) throws Exception {
-        ByteBuffer byteBuffer = ByteBuffer.allocate((int) fileChannel.size());
-        fileChannel.position(0);
-
-        // Read data from file.
-        fileChannel.read(byteBuffer);
-        String fileContent = new String(byteBuffer.array(), StandardCharsets.UTF_8);
-        byteBuffer.flip();
-
-        String[] fileOrganization = fileContent.split("\\r?\\n");
-
-        // Create list of table row values.
-        List<String> rowList = new ArrayList<>();
-        for (int i=0; i<fileOrganization.length; i++) {
-            String[] file = fileOrganization[i].split(",");
-            for (int j = 1; j < file.length; j++) {
-                rowList.add(file[j]);
-            }
-        }
-
-        // Split rows into attribute list
-        List<String[]> attributeList = new ArrayList<>();
-        for(String row : rowList) {
-            String[] attribute = row.split(";");
-            attributeList.add(attribute);
-        }
-
-        int attributeLength = attributeList.get(0).length;
-
-        String[][] tableData = new String[attributeLength][rowList.size()];
-        String[] header = new String[attributeLength];
-        int[] headerSizes = new int[attributeLength];
-
-        for (int i=0; i<attributeLength; i++) {
-            String[] value = null;
-            for (int j=0; j<attributeList.size(); j++) {
-                value = attributeList.get(j)[i].split(":");
-                tableData[i][j] = value[1];
-            }
-            header[i] = value[0];
-            headerSizes[i] = getLongestStringSize(tableData[i]);
-        }
-
+    private static void printTable(String[][] relationData, String[] header, int[] headerSizes) {
+        // Output to command prompt.
         String attributeHeader = "#";
-
         for (int i=0; i<headerSizes.length; i++) {
             int headerSize = Math.max((headerSizes[i]), header[i].length());
             attributeHeader += String.format(" %-" +headerSize+"s #", header[i]);
@@ -257,10 +252,10 @@ public class Main {
         }
         System.out.println();
 
-        for (int i=0; i<tableData[0].length; i++) {
+        for (int i=0; i<relationData[0].length; i++) {
             String rowFormat = "|";
-            for (int j=0; j<tableData.length; j++) {
-                rowFormat += String.format(" %-" + Math.max((headerSizes[j]), header[j].length()) + "s |", tableData[j][i]);
+            for (int j=0; j<relationData.length; j++) {
+                rowFormat += String.format(" %-" + Math.max((headerSizes[j]), header[j].length()) + "s |", relationData[j][i]);
             }
             System.out.println(rowFormat);
         }
@@ -269,104 +264,6 @@ public class Main {
             System.out.print("-");
         }
         System.out.println();
-
-    }
-
-    // SELECT course_id, title FROM table_name;
-    private static void selectColumns(String columns, FileChannel fileChannel) throws Exception {
-        String[] attributes = columns.split(", ");
-        ByteBuffer byteBuffer = ByteBuffer.allocate((int) fileChannel.size());
-        fileChannel.position(0);
-
-        // Read data from file.
-        fileChannel.read(byteBuffer);
-        String fileContent = new String(byteBuffer.array(), StandardCharsets.UTF_8);
-        byteBuffer.flip();
-
-        String[] fileOrganization = fileContent.split("\\r?\\n");
-
-        List<String> rowList = new ArrayList<>();
-        for (int i=0; i<fileOrganization.length; i++) {
-            String[] file = fileOrganization[i].split(",");
-            for (int j = 1; j < file.length; j++) {
-                rowList.add(file[j]);
-            }
-        }
-
-        // Split rows into attribute list
-        List<String[]> attributeList = new ArrayList<>();
-        for(String row : rowList) {
-            String[] attribute = row.split(";");
-            attributeList.add(attribute);
-        }
-
-        List<String> selectedList = new ArrayList<>();
-        for (String[] attribute : attributeList) {
-            String selectedAttributes = "";
-            for (int i=0; i<attributes.length; i++) {
-                for (int j=0; j<attribute.length; j++) {
-                    if(attribute[j].startsWith(attributes[i])) {
-                        selectedAttributes += attribute[j] + "; ";
-                    }
-                }
-
-            }
-            selectedList.add(selectedAttributes);
-        }
-
-        attributeList.clear();
-
-        for(String row : selectedList) {
-            String[] attribute = row.split(";");
-            attributeList.add(attribute);
-        }
-
-        int attributeLength = attributeList.get(0).length - 1;
-
-        String[][] tableData = new String[attributeLength][rowList.size()];
-        String[] header = new String[attributeLength];
-        int[] headerSizes = new int[attributeLength];
-
-        for (int i=0; i<attributeLength; i++) {
-            String[] value = null;
-            for (int j=0; j<attributeList.size(); j++) {
-                value = attributeList.get(j)[i].split(":");
-                tableData[i][j] = value[1];
-            }
-            header[i] = value[0];
-            headerSizes[i] = getLongestStringSize(tableData[i]);
-        }
-
-        String attributeHeader = "#";
-
-        for (int i=0; i<headerSizes.length; i++) {
-            int headerSize = Math.max((headerSizes[i]), header[i].length());
-            attributeHeader += String.format(" %-" +headerSize+"s #", header[i]);
-        }
-
-        int headerLength = attributeHeader.length();
-        for(int i=0; i<headerLength; i++) {
-            System.out.print("#");
-        }
-        System.out.println("\n" + attributeHeader);
-        for(int i=0; i<headerLength; i++) {
-            System.out.print("#");
-        }
-        System.out.println();
-
-        for (int i=0; i<tableData[0].length; i++) {
-            String rowFormat = "|";
-            for (int j=0; j<tableData.length; j++) {
-                rowFormat += String.format(" %-" + Math.max((headerSizes[j]), header[j].length()) + "s |", tableData[j][i]);
-            }
-            System.out.println(rowFormat);
-        }
-
-        for(int i=0; i<headerLength; i++) {
-            System.out.print("-");
-        }
-        System.out.println();
-
     }
 
     private static void createFile(File in, File out) throws IOException {
@@ -429,7 +326,6 @@ public class Main {
 
     private static int getLongestStringSize(String[] array) {
         int maxLength = 0;
-        String longestString = null;
         for (String s : array) {
             if (s.length() > maxLength) {
                 maxLength = s.length();
